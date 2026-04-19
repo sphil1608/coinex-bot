@@ -1,0 +1,55 @@
+coinex:
+  access_id: "YOUR_ACCESS_ID"
+  secret_key: "YOUR_SECRET_KEY"
+  base_url: "https://api.coinex.com/v2"
+  ws_spot_url: "wss://socket.coinex.com/v2/spot"
+  ws_futures_url: "wss://socket.coinex.com/v2/futures"
+
+bot:
+  mode: "paper"           # paper | live
+  market_type: "spot"     # spot | futures
+  market: "BTCUSDT"
+  strategy: "ichimoku"    # see strategy list below
+  base_qty: "0.001"
+  max_open_orders: 5
+  risk_per_trade: 0.02    # 2% risk per trade
+  stop_loss_pct: 0.015
+  take_profit_pct: 0.03
+  leverage: 10            # futures only
+
+strategies:
+  # each strategy can be enabled/disabled
+  ichimoku:         { enabled: true, tf: "1h" }
+  rsi_mean_revert:  { enabled: true, rsi_period: 14, oversold: 30, overbought: 70 }
+  macd_cross:       { enabled: true, fast: 12, slow: 26, signal: 9 }
+  bollinger_bands:  { enabled: true, period: 20, std_dev: 2.0 }
+  ema_cross:        { enabled: true, fast: 9, slow: 21 }
+  vwap_revert:      { enabled: true }
+  momentum:         { enabled: true, period: 10 }
+  scalp_ob:         { enabled: false }        # order-book scalper
+  grid:             { enabled: false, levels: 10, spacing_pct: 0.005 }
+  arb_spread:       { enabled: false }
+  trend_follow:     { enabled: true, atr_period: 14, atr_mult: 2.0 }
+  breakout:         { enabled: true, lookback: 20 }
+  mean_revert_z:    { enabled: true, z_threshold: 2.0 }
+  dual_thrust:      { enabled: true, k1: 0.7, k2: 0.7, lookback: 5 }
+  supertrend:       { enabled: true, atr_period: 10, factor: 3.0 }
+  williams_r:       { enabled: true, period: 14, oversold: -80, overbought: -20 }
+  stoch_rsi:        { enabled: true, period: 14, k: 3, d: 3 }
+  dmi_adx:          { enabled: true, period: 14, adx_threshold: 25.0 }
+  parabolic_sar:    { enabled: true, step: 0.02, max: 0.2 }
+  hull_ma:          { enabled: true, period: 16 }
+  keltner_channel:  { enabled: true, period: 20, atr_mult: 1.5 }
+  donchian:         { enabled: true, period: 20 }
+  ml_ensemble:      { enabled: false }        # requires ML module
+
+ml:
+  enabled: false
+  model: "ensemble"       # logistic | gradient_boost | ensemble
+  feature_window: 50
+  retrain_interval: "24h"
+  min_confidence: 0.65
+
+dashboard:
+  enabled: true
+  port: 8080

@@ -1,0 +1,22 @@
+# Binaries
+bin/
+*.exe
+*.test
+
+# Config with secrets
+.env
+configs/config.local.yaml
+
+# Data and logs
+data/
+*.log
+*.ndjson
+*.csv
+
+# Go
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
