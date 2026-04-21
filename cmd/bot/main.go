@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -20,7 +21,14 @@ func main() {
 	cfgPath := flag.String("config", "configs/config.yaml", "path to config file")
 	flag.Parse()
 
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+	// ── Logging: file only so the terminal dashboard owns stdout ─────────────
+	logFile, err := os.OpenFile("bot.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		// Fallback: stderr at warn level
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	} else {
+		log.Logger = zerolog.New(logFile).With().Timestamp().Logger()
+	}
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	cfg, err := config.Load(*cfgPath)
@@ -45,6 +53,9 @@ func main() {
 	if cfg.Dashboard.Enabled {
 		go eng.StartDashboard(cfg.Dashboard.Port)
 	}
+
+	// ── Terminal dashboard (always on) ────────────────────────────────────────
+	eng.StartTerminalDash(eng.Journal, 3*time.Second)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

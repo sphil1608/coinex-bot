@@ -11,6 +11,7 @@ import (
 
 	"github.com/rusty/coinex-bot/internal/api"
 	"github.com/rusty/coinex-bot/internal/config"
+	"github.com/rusty/coinex-bot/internal/journal"
 	"github.com/rusty/coinex-bot/internal/ml"
 	"github.com/rusty/coinex-bot/internal/models"
 	"github.com/rusty/coinex-bot/internal/strategies"
@@ -32,14 +33,25 @@ type Engine struct {
 	openOrders  map[string]*models.Order
 	stopCh      chan struct{}
 	SignalLog   []models.Signal
+	Journal     *journal.Journal
+	startedAt   time.Time
 }
 
 func New(cfg *config.Config, client *api.Client) *Engine {
+	j, err := journal.Open(cfg.Bot.JournalPath)
+	if err != nil {
+		// Non-fatal: fall back to a temp file so the bot still runs
+		log.Warn().Err(err).Msg("journal open failed, using temp file")
+		j, _ = journal.Open("trades.ndjson")
+	}
+
 	e := &Engine{
 		cfg:        cfg,
 		client:     client,
 		openOrders: make(map[string]*models.Order),
 		stopCh:     make(chan struct{}),
+		Journal:    j,
+		startedAt:  time.Now(),
 	}
 
 	// Build strategy list from config
@@ -152,7 +164,7 @@ func (e *Engine) tick(ctx context.Context) error {
 		return nil
 	}
 
-	log.Info().
+	log.Debug().
 		Str("strategy", consensus.Strategy).
 		Str("signal", string(consensus.Signal)).
 		Float64("confidence", consensus.Confidence).
@@ -281,14 +293,50 @@ func (e *Engine) executeSignal(ctx context.Context, sig models.Signal, ob models
 	e.mu.Unlock()
 
 	// Schedule SL / TP cancellation
-	go e.manageTrade(ctx, order, price, sig.Signal)
+	go e.manageTrade(ctx, order, price, sig.Signal, sig.Strategy)
 	return nil
 }
 
 // manageTrade waits and cancels the order or closes at SL/TP.
-func (e *Engine) manageTrade(ctx context.Context, order *models.Order, entryPrice decimal.Decimal, sig models.SignalType) {
+func (e *Engine) manageTrade(ctx context.Context, order *models.Order, entryPrice decimal.Decimal, sig models.SignalType, strategy string) {
+	entryTime := time.Now()
 	sl := decimal.NewFromFloat(e.cfg.Bot.StopLossPct)
 	tp := decimal.NewFromFloat(e.cfg.Bot.TakeProfitPct)
+
+	recordClose := func(exitPrice decimal.Decimal, reason string) {
+		var pnl decimal.Decimal
+		if sig == models.SignalLong {
+			pnl = exitPrice.Sub(entryPrice).Mul(order.Amount)
+		} else {
+			pnl = entryPrice.Sub(exitPrice).Mul(order.Amount)
+		}
+		pnlPct, _ := exitPrice.Sub(entryPrice).Div(entryPrice).Float64()
+		side := models.SideBuy
+		if sig == models.SignalShort {
+			side = models.SideSell
+		}
+		rec := journal.TradeRecord{
+			ID:           order.ID,
+			Market:       order.Market,
+			MarketType:   order.MarketType,
+			Side:         side,
+			Strategy:     strategy,
+			EntryPrice:   entryPrice,
+			ExitPrice:    exitPrice,
+			Quantity:     order.Amount,
+			PnL:          pnl,
+			PnLPct:       pnlPct,
+			ExitReason:   reason,
+			EntryOrderID: order.ID,
+			EntryTime:    entryTime,
+			ExitTime:     time.Now(),
+			Duration:     time.Since(entryTime).Truncate(time.Second).String(),
+			Paper:        e.cfg.Bot.Mode == "paper",
+		}
+		if err := e.Journal.Record(rec); err != nil {
+			log.Error().Err(err).Msg("journal record failed")
+		}
+	}
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -300,6 +348,9 @@ func (e *Engine) manageTrade(ctx context.Context, order *models.Order, entryPric
 		case <-ctx.Done():
 			return
 		case <-timeout.C:
+			// 4-hour timeout — record as timed-out exit at current mid
+			ob := e.lob.Snapshot()
+			recordClose(ob.MidPrice(), "timeout")
 			_ = e.client.CancelSpotOrder(ctx, order.Market, order.ID)
 			e.removeOrder(order.ID)
 			return
@@ -317,13 +368,17 @@ func (e *Engine) manageTrade(ctx context.Context, order *models.Order, entryPric
 			}
 			pctF, _ := pct.Float64()
 			if pctF <= -sl.InexactFloat64() {
-				log.Info().Str("order", order.ID).Float64("pct", pctF).Msg("stop-loss hit")
+				log.Info().Str("order", order.ID).Str("market", order.Market).
+					Str("pnl_pct", fmt.Sprintf("%.2f%%", pctF*100)).Msg("🔴 stop-loss")
+				recordClose(cur, "sl")
 				_ = e.client.CancelSpotOrder(ctx, order.Market, order.ID)
 				e.removeOrder(order.ID)
 				return
 			}
 			if pctF >= tp.InexactFloat64() {
-				log.Info().Str("order", order.ID).Float64("pct", pctF).Msg("take-profit hit")
+				log.Info().Str("order", order.ID).Str("market", order.Market).
+					Str("pnl_pct", fmt.Sprintf("+%.2f%%", pctF*100)).Msg("🟢 take-profit")
+				recordClose(cur, "tp")
 				_ = e.client.CancelSpotOrder(ctx, order.Market, order.ID)
 				e.removeOrder(order.ID)
 				return
