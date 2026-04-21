@@ -31,6 +31,7 @@ type BotConfig struct {
 	StopLossPct   float64 `mapstructure:"stop_loss_pct"`
 	TakeProfitPct float64 `mapstructure:"take_profit_pct"`
 	Leverage      int     `mapstructure:"leverage"`
+	JournalPath   string  `mapstructure:"journal_path"`
 }
 
 type StrategyConf map[string]interface{}

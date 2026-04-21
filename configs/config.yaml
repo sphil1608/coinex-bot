@@ -1,22 +1,22 @@
 coinex:
-  access_id: "YOUR_ACCESS_ID"
-  secret_key: "YOUR_SECRET_KEY"
+  access_id: "4124BC4AFF9240A6AF0D2297FC7F7F25"
+  secret_key: "428265868E361A766A889151137950EDA12AB20277BE88C6"
   base_url: "https://api.coinex.com/v2"
   ws_spot_url: "wss://socket.coinex.com/v2/spot"
   ws_futures_url: "wss://socket.coinex.com/v2/futures"
 
 bot:
   mode: "paper"           # paper | live
-  market_type: "spot"     # spot | futures
-  market: "BTCUSDT"
+  market_type: "futures"     # spot | futures
+  market: "POLUSDT"
   strategy: "ichimoku"    # see strategy list below
-  base_qty: "0.001"
+  base_qty: ".900"
   max_open_orders: 5
-  risk_per_trade: 0.02    # 2% risk per trade
+  risk_per_trade: 0.05    # 2% risk per trade
   stop_loss_pct: 0.015
   take_profit_pct: 0.03
   leverage: 10            # futures only
-
+  journal_path: "trades.json"
 strategies:
   # each strategy can be enabled/disabled
   ichimoku:         { enabled: true, tf: "1h" }
