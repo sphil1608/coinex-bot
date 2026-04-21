@@ -119,6 +119,9 @@ func (e *Engine) Run(ctx context.Context) error {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 
+	backoff := 5 * time.Second
+	const maxBackoff = 5 * time.Minute
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -127,7 +130,20 @@ func (e *Engine) Run(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 			if err := e.tick(ctx); err != nil {
-				log.Error().Err(err).Msg("tick error")
+				log.Warn().Err(err).
+					Str("retry_in", backoff.String()).
+					Msg("⚠️  tick error — backing off")
+				select {
+				case <-time.After(backoff):
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+			} else {
+				backoff = 5 * time.Second
 			}
 			if e.ensemble != nil {
 				e.ensemble.MaybeRetrain(ctx)

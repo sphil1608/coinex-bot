@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -17,11 +19,37 @@ import (
 	_ "github.com/rusty/coinex-bot/internal/strategies"
 )
 
+const lockFile = "coinex-bot.lock"
+
+func acquireLock() error {
+	if data, err := os.ReadFile(lockFile); err == nil {
+		pid, err := strconv.Atoi(string(data))
+		if err == nil {
+			if proc, err := os.FindProcess(pid); err == nil {
+				if err := proc.Signal(syscall.Signal(0)); err == nil {
+					return fmt.Errorf("another instance is already running (PID %d) — kill it first with: kill %d", pid, pid)
+				}
+			}
+		}
+		_ = os.Remove(lockFile)
+	}
+	return os.WriteFile(lockFile, []byte(strconv.Itoa(os.Getpid())), 0o644)
+}
+
+func releaseLock() { _ = os.Remove(lockFile) }
+
 func main() {
 	cfgPath := flag.String("config", "configs/config.yaml", "path to config file")
 	flag.Parse()
 
-	// Log to bot.log AND stdout so errors are visible in screen session
+	// ── Lockfile: prevent two instances ──────────────────────────────────────
+	if err := acquireLock(); err != nil {
+		fmt.Fprintf(os.Stderr, "❌  %s\n", err)
+		os.Exit(1)
+	}
+	defer releaseLock()
+
+	// ── Logging: stdout + bot.log ─────────────────────────────────────────────
 	logFile, err := os.OpenFile("bot.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
@@ -57,7 +85,6 @@ func main() {
 		go eng.StartDashboard(cfg.Dashboard.Port)
 	}
 
-	// Colored terminal dashboard — works great in screen over SSH
 	eng.StartTerminalDash(eng.Journal, 3*time.Second)
 
 	ctx, cancel := context.WithCancel(context.Background())
