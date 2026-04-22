@@ -1,6 +1,6 @@
 coinex:
-  access_id: "4124BC4AFF9240A6AF0D2297FC7F7F25"
-  secret_key: "428265868E361A766A889151137950EDA12AB20277BE88C6"
+  access_id: "YOUR_ACCESS_ID"
+  secret_key: "YOUR_SECRET_KEY"
   base_url: "https://api.coinex.com/v2"
   ws_spot_url: "wss://socket.coinex.com/v2/spot"
   ws_futures_url: "wss://socket.coinex.com/v2/futures"
@@ -10,7 +10,7 @@ bot:
   market_type: "futures"     # spot | futures
   market: "POLUSDT"
   strategy: "ichimoku"    # see strategy list below
-  base_qty: ".900"
+  base_qty: "22.756"
   max_open_orders: 5
   risk_per_trade: 0.05    # 2% risk per trade
   stop_loss_pct: 0.015
@@ -20,7 +20,7 @@ bot:
 strategies:
   # each strategy can be enabled/disabled
   ichimoku:         { enabled: true, tf: "1h" }
-  rsi_mean_revert:  { enabled: true, rsi_period: 14, oversold: 30, overbought: 70 }
+  rsi_mean_revert:  { enabled: false, rsi_period: 14, oversold: 30, overbought: 70 }
   macd_cross:       { enabled: true, fast: 12, slow: 26, signal: 9 }
   bollinger_bands:  { enabled: true, period: 20, std_dev: 2.0 }
   ema_cross:        { enabled: true, fast: 9, slow: 21 }

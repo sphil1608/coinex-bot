@@ -20,3 +20,4 @@ vendor/
 .vscode/
 .idea/
 *.swp
+configs/config.yaml
